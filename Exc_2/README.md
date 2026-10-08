@@ -147,22 +147,111 @@ Load the generated data into PostgreSQL in a **new table** called `orders`.
 Write the `CREATE TABLE` yourself (choose sensible types for each column) and
 use the same `\COPY` pattern as in section 3.3.
 
+```sql
+CREATE TABLE orders (
+		customer_name VARCHAR(255),
+		product_category VARCHAR(255),
+		quantity INTEGER,
+		price_per_unit NUMERIC(10,2),
+		order_date DATE,
+		country VARCHAR(255)
+	);
+	\COPY orders(customer_name,product_category,quantity,price_per_unit,order_date,country) FROM '/data/orders_1M.csv' DELIMITER ',' CSV HEADER;
+```
+
 Using SQL ([list of supported SQL commands](https://www.postgresql.org/docs/current/sql-commands.html)),
 answer the following questions:
 
 **A.** Which order has the highest `price_per_unit`?
+```sql
+SELECT *
+FROM orders
+ORDER BY price_per_unit DESC
+LIMIT 1;
+```
+
+customer_name | product_category | quantity | price_per_unit | order_date | country 
+---------------+------------------+----------+----------------+------------+---------
+ Emma Brown    | Automotive       |        3 |        2000.00 | 2024-10-11 | Italy
+
 
 **B.** What are the top 3 product categories with the highest total quantity
 sold across all orders?
 
+```sql
+SELECT product_category, SUM(quantity) AS total_quantity
+FROM orders
+GROUP BY product_category
+ORDER BY total_quantity DESC
+LIMIT 3;
+```
+
+ product_category | total_quantity 
+------------------+----------------
+ Health & Beauty  |         300842
+ Electronics      |         300804
+ Toys             |         300598
+
 **C.** What is the total revenue per product category?
 (Revenue = `price_per_unit × quantity`)
+```sql
+SELECT product_category, SUM(price_per_unit * quantity) as total_revenue
+FROM orders
+GROUP BY product_category
+ORDER BY total_revenue DESC;
+```
+ product_category | total_revenue 
+------------------+---------------
+ Automotive       |  306589798.86
+ Electronics      |  241525009.45
+ Home & Garden    |   78023780.09
+ Sports           |   61848990.83
+ Health & Beauty  |   46599817.89
+ Office Supplies  |   38276061.64
+ Fashion          |   31566368.22
+ Toys             |   23271039.02
+ Grocery          |   15268355.66
+ Books            |   12731976.04
 
 **D.** Who are the top 5 customers by total spending?
+```sql
+SELECT customer_name, SUM(price_per_unit * quantity) AS total_spending
+FROM orders
+GROUP BY customer_name
+ORDER BY total_spending DESC
+LIMIT 5;
+```
+ customer_name  | total_spending 
+----------------+----------------
+ Carol Taylor   |      991179.18
+ Nina Lopez     |      975444.95
+ Daniel Jackson |      959344.48
+ Carol Lewis    |      947708.57
+ Daniel Young   |      946030.14
+ 
 
 **E.** Look at the spending totals in D — and at how many orders each of those
 customers has. What do you notice? Open `ecommerce/dataset_generator.py` and
 explain *why* the data looks like this.
+```sql
+SELECT customer_name, SUM(price_per_unit * quantity) AS total_spending, COUNT(*) AS total_orders
+FROM orders
+GROUP BY customer_name
+ORDER BY total_spending DESC
+LIMIT 5;
+```
+customer_name  | total_spending | total_orders 
+----------------+----------------+--------------
+ Carol Taylor   |      991179.18 |         1028
+ Nina Lopez     |      975444.95 |          980
+ Daniel Jackson |      959344.48 |         1033
+ Carol Lewis    |      947708.57 |          943
+ Daniel Young   |      946030.14 |          973
+
+ The top customer is not the one with the most total_orders. 
+ The categories have random prices, CATEGORY_PRICE have big differences from one to another, also the quantity is random, having the least quantity in an order with the most expensive category is more than having the most quantity in the least expensive category.
+ 
+
 
 ### Activity 2.2 — Why Is This Self-Join So Slow?
 
@@ -194,12 +283,14 @@ Run the self-join (with `\timing on`) on each of the three tables and fill in:
 
 | rows in table | join result (`COUNT(*)`) | time |
 |---|---|---|
-| 50 000 | | |
-| 100 000 | | |
-| 200 000 | | |
+| 50 000 | 27501822 | 2146.459ms |
+| 100 000 | 109946508 | 8721.209ms |
+| 200 000 | 439395606 | 43412.785ms |
 
 When the input **doubles**, by what factor do the result and the time grow?
 Use this to **predict** the result size and the runtime on `people_big` (1M rows).
+When the input doubles, the result increments by 4, and the time increments by 4,5.
+
 
 **Step 2 — Does an index help?** Create an index on `country` of `people_100k`,
 run `ANALYZE people_100k;`, and repeat the query. Did the time change? Use
