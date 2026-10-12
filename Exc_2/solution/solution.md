@@ -1,0 +1,253 @@
+
+### Activity 2.1 — PostgreSQL Analytical Queries (E-commerce)
+
+Generate the dataset (in another terminal, from the `ecommerce` folder):
+
+```bash
+cd ecommerce
+python3 dataset_generator.py
+```
+
+This writes `data/orders_1M.csv`, which is available inside the PostgreSQL
+container as `/data/orders_1M.csv`. Its columns are:
+
+```
+customer_name, product_category, quantity, price_per_unit, order_date, country
+```
+
+Load the generated data into PostgreSQL in a **new table** called `orders`.
+Write the `CREATE TABLE` yourself (choose sensible types for each column) and
+use the same `\COPY` pattern as in section 3.3.
+
+```sql
+CREATE TABLE orders (
+		customer_name VARCHAR(255),
+		product_category VARCHAR(255),
+		quantity INTEGER,
+		price_per_unit NUMERIC(10,2),
+		order_date DATE,
+		country VARCHAR(255)
+	);
+	\COPY orders(customer_name,product_category,quantity,price_per_unit,order_date,country) FROM '/data/orders_1M.csv' DELIMITER ',' CSV HEADER;
+```
+
+Using SQL ([list of supported SQL commands](https://www.postgresql.org/docs/current/sql-commands.html)),
+answer the following questions:
+
+**A.** Which order has the highest `price_per_unit`?
+```sql
+SELECT *
+FROM orders
+ORDER BY price_per_unit DESC
+LIMIT 1;
+```
+
+| customer_name | product_category | quantity | price_per_unit | order_date | country |
+|---------------|------------------|----------|----------------|------------|---------|
+| Emma Brown    | Automotive       | 3        | 2000.00        | 2024-10-11 | Italy   |
+
+
+**B.** What are the top 3 product categories with the highest total quantity
+sold across all orders?
+
+```sql
+SELECT product_category, SUM(quantity) AS total_quantity
+FROM orders
+GROUP BY product_category
+ORDER BY total_quantity DESC
+LIMIT 3;
+```
+
+| product_category | total_quantity |
+|------------------|---------------:|
+| Health & Beauty  |         300842 |
+| Electronics      |         300804 |
+| Toys             |         300598 |
+
+**C.** What is the total revenue per product category?
+(Revenue = `price_per_unit × quantity`)
+```sql
+SELECT product_category, SUM(price_per_unit * quantity) as total_revenue
+FROM orders
+GROUP BY product_category
+ORDER BY total_revenue DESC;
+```
+| product_category  | total_revenue |
+|-------------------|--------------:|
+| Automotive        | 306589798.86  |
+| Electronics       | 241525009.45  |
+| Home & Garden     | 78023780.09   |
+| Sports            | 61848990.83   |
+| Health & Beauty   | 46599817.89   |
+| Office Supplies   | 38276061.64   |
+| Fashion            | 31566368.22   |
+| Toys              | 23271039.02   |
+| Grocery           | 15268355.66   |
+| Books             | 12731976.04   |
+
+**D.** Who are the top 5 customers by total spending?
+```sql
+SELECT customer_name, SUM(price_per_unit * quantity) AS total_spending
+FROM orders
+GROUP BY customer_name
+ORDER BY total_spending DESC
+LIMIT 5;
+```
+| customer_name  | total_spending |
+|----------------|---------------:|
+| Carol Taylor   |      991179.18 |
+| Nina Lopez     |      975444.95 |
+| Daniel Jackson |      959344.48 |
+| Carol Lewis    |      947708.57 |
+| Daniel Young   |      946030.14 |
+ 
+
+**E.** Look at the spending totals in D — and at how many orders each of those
+customers has. What do you notice? Open `ecommerce/dataset_generator.py` and
+explain *why* the data looks like this.
+```sql
+SELECT customer_name, SUM(price_per_unit * quantity) AS total_spending, COUNT(*) AS total_orders
+FROM orders
+GROUP BY customer_name
+ORDER BY total_spending DESC
+LIMIT 5;
+```
+| customer_name  | total_spending | total_orders |
+|----------------|---------------:|-------------:|
+| Carol Taylor   |      991179.18 |         1028 |
+| Nina Lopez     |      975444.95 |          980 |
+| Daniel Jackson |      959344.48 |         1033 |
+| Carol Lewis    |      947708.57 |          943 |
+| Daniel Young   |      946030.14 |          973 |
+
+**Answer:** 
+ The top customer is not the one with the most total_orders. 
+ The categories have random prices, CATEGORY_PRICE have big differences from one to another, also the quantity is random, having the least quantity in an order with the most expensive category is more than having the most quantity in the least expensive category.
+ 
+
+
+### Activity 2.2 — Why Is This Self-Join So Slow?
+
+Users of the system sometimes run naive queries such as:
+
+```sql
+SELECT COUNT(*)
+FROM people_big p1
+JOIN people_big p2
+  ON p1.country = p2.country;
+```
+
+On the full 1M-row table this takes **more than 10 minutes** and slows down
+the whole database for everyone else. Your job is to find out *why* before
+proposing a fix.
+
+> **Do not run it on the full table in class** — use the smaller tables below.
+> (If you are curious, run it at home and let it finish.)
+
+**Step 1 — Measure how it grows.** Create three smaller copies of the table:
+
+```sql
+CREATE TABLE people_50k  AS SELECT * FROM people_big WHERE id <= 50000;
+CREATE TABLE people_100k AS SELECT * FROM people_big WHERE id <= 100000;
+CREATE TABLE people_200k AS SELECT * FROM people_big WHERE id <= 200000;
+```
+
+Run the self-join (with `\timing on`) on each of the three tables and fill in:
+
+| rows in table | join result (`COUNT(*)`) | time |
+|---|---|---|
+| 50 000 | 27501822 | 2146.459ms |
+| 100 000 | 109946508 | 8721.209ms |
+| 200 000 | 439395606 | 43412.785ms |
+
+When the input **doubles**, by what factor do the result and the time grow?
+Use this to **predict** the result size and the runtime on `people_big` (1M rows).
+
+**Answer:**
+When the input doubles, the result increments by 4, and the time increments by 4,5.
+If we try to predict the result size and the runtime on people_big we multiply the 100k with 100 to get to 1M.
+
+**Result size:** The result size would be around 11M rows.
+
+**Runtime:** The runtime would be around 872120,9 ms.
+
+
+**Step 2 — Does an index help?** Create an index on `country` of `people_100k`,
+run `ANALYZE people_100k;`, and repeat the query. Did the time change? Use
+`EXPLAIN ANALYZE` to support your answer. Why does (or doesn't) the index help?
+
+```sql
+CREATE INDEX idx_country_100k ON people_100k (country);
+ANALYZE people_100k;
+EXPLAIN ANALYZE SELECT COUNT(*) FROM people_100k p1 JOIN people_100k p2 ON p1.country = p2.country;
+```
+
+**Answer:**
+
+**Execution time:** 15156.680 ms
+
+No, the index does not help. The execution time was increased from 8721 ms to 15156 ms, is almost double it time.
+
+EXPLAIN ANALYZE tried to use Parallel Index Only Scan, but the performance did not improve. Using the indexes are to quickly look up specific rows when filtering with the WHERE. This query has no filters, database must read the entire table again.
+
+
+
+
+**Step 3 — Rewrite it.** The query only wants the *number* of matching pairs,
+not the pairs themselves. If a country has *k* people, how many pairs does it
+contribute to the join? Write a query that computes the **same number
+without a join**. Check that it returns exactly the same result as the join on
+`people_100k`, then run it on `people_big` and compare its runtime with your
+prediction from Step 1.
+
+```sql
+SELECT SUM(CAST(k AS BIGINT) * CAST(k AS BIGINT)) AS total_pairs
+FROM (
+  SELECT COUNT(*) AS k
+  FROM people_100k
+  GROUP BY country
+) subquery;
+```
+
+Doing this new query, we avoid the expensive self-join entirely. We get a faster running on this query 13.707 ms
+
+```sql
+SELECT SUM(CAST(k AS BIGINT) * CAST(k AS BIGINT)) AS total_pairs
+FROM (
+  SELECT COUNT(*) AS k
+  FROM people_100k
+  GROUP BY country
+) subquery;
+```
+
+For the people_big with the 1M dataset, we get 721.838 ms.
+
+The rewritten query on the 1M dataset is exponentially faster than our prediction that was 872120ms. This happens because the new query doesn't compare every row against each other, reducing its complexity a lot.
+
+
+**Step 4 — Discussion (submit in writing).** Considering **scalability** and
+**efficiency**, which approaches and/or optimizations can be applied to improve
+this kind of query in a real system? Discuss at least:
+
+- **What the rewrite in Step 3 tells you about adding more hardware or an index;**
+
+  The rewrite shows that the real problem was how the query was written, not the computer speed. Because the original JOIN compares everyone to everyone. Buying a more powerful server is just a temporary method, as soon as the data grows again, it will be incredibly slow again.
+
+  In Step 2, we saw that an index doesn't help here, indexes are used like a book glossary, but this query needs to read every single row in the whole table, so the index adds extra work.
+
+- **what you would do if the business actually needed **the pairs themselves**
+  (not just their count) — would a bigger machine or a cluster help, and how
+  much?** 
+
+  If the company needed to see all the pairs, getting a bigger database server wouldn't be enough. The system would choke trying to write and transfer that massive amount of text.
+
+  A cluster of computers would help, instead of one machine trying to do everything, you use different tools to split the work across many machines. The calculate the pairs and save the data at the same time in parallel. However, it would be very heavy and slow task.
+
+- **the limits of an **OLTP database** for this workload, especially in a
+  **large-scale cloud environment**.**
+
+  PostgreSQL is an OLTP database, it is designed for quick, small and everyday actions. If you run a massive query like this on a live database, it would hog all the CPU and memory.
+
+  In a cloud system, this query would freeze the database for everyone else, causing the app to crash.
+
+  To prevent this, big queries should never be run on the main database, it should be run on a separate copy of the database.
