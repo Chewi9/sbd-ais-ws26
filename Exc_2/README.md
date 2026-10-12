@@ -289,12 +289,28 @@ Run the self-join (with `\timing on`) on each of the three tables and fill in:
 
 When the input **doubles**, by what factor do the result and the time grow?
 Use this to **predict** the result size and the runtime on `people_big` (1M rows).
+
 When the input doubles, the result increments by 4, and the time increments by 4,5.
+
+If we try to predict the result size and the runtime on people_big we multiply the 100k with 100 to get to 1M.
+
+The result size would be around 11M rows.
+The runtime would be around 872120,9 ms.
 
 
 **Step 2 — Does an index help?** Create an index on `country` of `people_100k`,
 run `ANALYZE people_100k;`, and repeat the query. Did the time change? Use
 `EXPLAIN ANALYZE` to support your answer. Why does (or doesn't) the index help?
+
+Answer:
+CREATE INDEX idx_country_100k ON people_100k (country);
+ANALYZE people_100k;
+EXPLAIN ANALYZE SELECT COUNT(*) FROM people_100k p1 JOIN people_100k p2 ON p1.country = p2.country;
+
+Execution time: 15156.680 ms
+No, the index does not help. The execution time was increased from 8721 ms to 15156 ms, is almost double it time.
+
+EXPLAIN ANALYZE tried to use Parallel Index Only Scan, but the performance did not improve. Using the indexes are to quickly look up specific rows when filtering with the WHERE. This query has no filters, database must read the entire table again.
 
 **Step 3 — Rewrite it.** The query only wants the *number* of matching pairs,
 not the pairs themselves. If a country has *k* people, how many pairs does it
@@ -303,16 +319,50 @@ without a join**. Check that it returns exactly the same result as the join on
 `people_100k`, then run it on `people_big` and compare its runtime with your
 prediction from Step 1.
 
+Answer:
+SELECT SUM(CAST(k AS BIGINT) * CAST(k AS BIGINT)) AS total_pairs
+FROM (
+  SELECT COUNT(*) AS k
+  FROM people_100k
+  GROUP BY country
+) subquery;
+
+Doing this new query, we avoid the expensive self-join entirely. We get a faster running on this query 13.707 ms
+
+SELECT SUM(CAST(k AS BIGINT) * CAST(k AS BIGINT)) AS total_pairs
+FROM (
+  SELECT COUNT(*) AS k
+  FROM people_100k
+  GROUP BY country
+) subquery;
+
+For the people_big with the 1M dataset, we get 721.838 ms.
+
+The rewritten query on the 1M dataset is exponentially faster than our prediction that was 872120ms. This happens because the new query doesn't compare every row against each other, reducing its complexity a lot.
+
+
 **Step 4 — Discussion (submit in writing).** Considering **scalability** and
 **efficiency**, which approaches and/or optimizations can be applied to improve
 this kind of query in a real system? Discuss at least:
 
 - what the rewrite in Step 3 tells you about adding more hardware or an index;
+
+The rewrite shows that the real problem was how the query was written, not the computer speed. Because the original JOIN compares everyone to everyone. Buying a more powerful server is just a temporary method, as soon as the data grows again, it will be incredibly slow again.
+In Step 2, we saw that an index doesn't help here, indexes are used like a book glossary, but this query needs to read every single row in the whole table, so the index adds extra work.
+
 - what you would do if the business actually needed **the pairs themselves**
   (not just their count) — would a bigger machine or a cluster help, and how
   much?
+
+If the company needed to see all the pairs, getting a bigger database server wouldn't be enough. The system would choke trying to write and transfer that massive amount of text.
+A cluster of computers would help, instead of one machine trying to do everything, you use different tools to split the work across many machines. The calculate the pairs and save the data at the same time in parallel. However, it would be very heavy and slow task.
+
 - the limits of an **OLTP database** for this workload, especially in a
   **large-scale cloud environment**.
+
+PostgreSQL is an OLTP database, it is designed for quick, small and everyday actions. If you run a massive query like this on a live database, it would hog all the CPU and memory.
+In a cloud system, this query would freeze the database for everyone else, causing the app to crash.
+To prevent this, big queries should never be run on the main database, it should be run on a separate copy of the database.
 
 > **Optional:** support your answer with a diagram, SQL or code.
 
