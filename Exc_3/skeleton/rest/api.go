@@ -29,7 +29,12 @@ func GetMenu(db *repository.DatabaseHandler) http.HandlerFunc {
 }
 
 // todo create GetOrders /api/order/all
-
+// GetOrders 			godoc
+// @tags 			Order
+// @Description 	Returns all orders
+// @Produce  		json
+// @Success 		200 {array} model.Order
+// @Router 			/api/order/all [get]
 func GetOrders(db *repository.DatabaseHandler) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		orders := db.GetOrders()
@@ -40,7 +45,12 @@ func GetOrders(db *repository.DatabaseHandler) http.HandlerFunc {
 }
 
 // todo create GetOrdersTotal /api/order/total
-
+// GetOrdersTotal 			godoc
+// @tags 			Order
+// @Description 	Returns the total of all orders
+// @Produce  		json
+// @Success 		200 {array} model.Order
+// @Router 			/api/order/total [get]
 func GetOrdersTotal(db *repository.DatabaseHandler) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		totalledOrders := db.GetTotalledOrders()

@@ -71,6 +71,50 @@ const docTemplate = `{
                     }
                 }
             }
+        },
+        "/api/order/all": {
+            "get": {
+                "description": "Returns all orders",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Order"
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/Order"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/order/total": {
+            "get": {
+                "description": "Returns the total of all orders",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Order"
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/Order"
+                            }
+                        }
+                    }
+                }
+            }
         }
     },
     "definitions": {
@@ -95,7 +139,7 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "amount": {
-                    "description": "amount with uint64 because in getTotalledOrders we want a uint64 for the amount of orders to avoid overflow",
+                    "description": "not negative number of drinks ordered",
                     "type": "integer"
                 },
                 "created_at": {

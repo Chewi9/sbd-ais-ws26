@@ -1,0 +1,16 @@
+{
+  "name": "Debian",
+  "image": "mcr.microsoft.com/devcontainers/base:debian",
+
+  "features": {
+    "ghcr.io/devcontainers/features/go:1": {
+      "version": "latest"
+    }
+  },
+
+  "postCreateCommand": "bash -lc 'go install github.com/swaggo/swag/cmd/swag@latest'",
+
+  "remoteEnv": {
+    "PATH": "${containerEnv:PATH}:${containerEnv:HOME}/go/bin"
+  }
+}
