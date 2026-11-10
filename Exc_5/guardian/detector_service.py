@@ -13,30 +13,53 @@ import argparse
 import json
 import time
 
-from confluent_kafka import Consumer, Producer
+from confluent_kafka import Consumer, Producer, KafkaException
 
 from model import BearingModel
 
 ap = argparse.ArgumentParser()
 ap.add_argument("--name", default="det-1", help="instance name (shows up in the scoreboard)")
-ap.add_argument("--in-topic", default=None, help="TODO: the topic your gateways write to")
-ap.add_argument("--group", default=None, help="TODO: the consumer group of this detector")
+ap.add_argument("--in-topic", default="readings", help="the topic your gateways write to")
+ap.add_argument("--group", default="detectors", help="the consumer group of this detector")
 ap.add_argument("--out-topic", default="anomalies")
 ap.add_argument("--bootstrap", default="localhost:9092")
 args = ap.parse_args()
-if not args.in_topic or not args.group:
-    raise SystemExit("TODO: set --in-topic and --group (or give them defaults above)")
 
 model = BearingModel(instance=args.name)
+
+machine_partition = {}
+
+def forget(partitions):
+    gone = {p.partition for p in partitions}
+    for mid in [m for m, p in machine_partition.items() if p in gone]:
+        model.forget(mid)
+        del machine_partition[mid]
+
+def on_assign(c, partitions):
+    print(f"[{args.name}] assigned partitions {sorted(p.partition for p in partitions)}", flush=True)
+
+def on_revoke(c, partitions):
+    try:
+        c.commit(asynchronous=False)    
+    except KafkaException:
+        pass
+    forget(partitions)
+
+
+def on_lost(c, partitions):
+    forget(partitions)
+
 consumer = Consumer({
     "bootstrap.servers": args.bootstrap,
     "group.id": args.group,
     "client.id": args.name,
     "auto.offset.reset": "latest",     # TODO: why "latest" and not "earliest" for a live detector?
+    # Live detector: start at now, not at old runs still in the topic
 })
 producer = Producer({
     "bootstrap.servers": args.bootstrap,
-    # TODO: more settings?
+    "enable.idempotence": True,
+    "linger.ms": 20,
 })
 consumer.subscribe([args.in_topic])
 print(f"[{args.name}] {args.in_topic} -> {args.out_topic} (Ctrl+C to stop)", flush=True)
@@ -52,6 +75,7 @@ try:
             print(f"[{args.name}] {msg.error()}")
             continue
         reading = json.loads(msg.value())
+        machine_partition[reading["machine_id"]] = msg.partition()
         score = model.score(reading)
         readings += 1
         if score is not None and score >= model.threshold:

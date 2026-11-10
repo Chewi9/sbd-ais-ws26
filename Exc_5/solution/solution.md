@@ -180,7 +180,7 @@ A small office logging one temperature reading per minute works completely fine 
 This Tipping point happens around a few hundred to thousand readings per second, or as soon as you add a second app that shouldn't overload the database. 
 Our lab is already past the point where a single database poller can keep up.
 
-If I had chosen option 1: I would need a per-machine poller and a separate archive path that does not read from PostgreSQL.
+If I had chosen option 1: I would have needed one reader per machine, plus a separate path for the archive and dashboard so the wouldn't overload PostgreSQL.
 ---
 
 ### Stage C — Challenge: Build the core (Optional)
@@ -208,3 +208,28 @@ process in its own terminal in `guardian/`.
    If something fails, find out why with `kafka-topics.sh
    --describe`, `kafka-consumer-groups.sh --describe` (Part 1, step 4) and the
    Kafka UI, and fix it.
+
+
+**Topics**
+```bash
+docker exec -it kafka kafka-topics.sh --bootstrap-server localhost:9092 --create --topic readings --partitions 8 --replication-factor 1
+```
+
+```bash
+docker exec -it kafka kafka-topics.sh --bootstrap-server localhost:9092 --create --topic anomalies --partitions 3 --replication-factor 1
+```
+
+```bash
+docker exec -it kafka kafka-topics.sh --bootstrap-server localhost:9092 --describe --topic readings
+```
+
+After 3 minutes we look at scoreboard.py and we have:
+- [PASS] R2 complete and ordered: 0 readings missing, 0 out of order: None of the instances missed data.
+- [PASS] R3 fresh: p95 latency < 5 s: the latency was 0.08s is way lower than the limit that is 5s
+- [PASS] detection: all faults found, at most 2 false alarms: detected 3 real faults, in 7.6s when it started.
+
+det-1 --> 15 machines (27.858 readings)
+det-2 --> 14 machines (26.002 readings)
+det-3 --> 14 machines (26.002 readings)
+det-4 --> 17 machines (31.568 readings)
+

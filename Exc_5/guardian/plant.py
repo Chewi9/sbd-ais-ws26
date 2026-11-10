@@ -90,16 +90,29 @@ class KafkaSink:
     (created how?), which key, which producer settings?
     """
 
+    TOPIC = "readings"
+
     def __init__(self, args):
         from confluent_kafka import Producer
         self.producer = Producer({
             "bootstrap.servers": args.bootstrap,
-            # TODO: more settings?
+            "enable.idempotence": True,
+            "linger.ms": 20,
+            "compression.type": "lz4",
         })
 
     def send(self, reading):
-        # TODO: send the reading (as JSON) to Kafka: self.producer.produce(...)
-        raise NotImplementedError("KafkaSink.send() is part of your solution (Stage C1)")
+        while True:
+            try:
+                self.producer.produce(self.TOPIC, key=reading["machine_id"], value=json.dumps(reading), on_delivery=self._on_delivery)
+                return
+            except BufferError:
+                self.producer.poll(0.1)
+
+    @staticmethod
+    def _on_delivery(err, msg):
+        if err is not None:
+            print(f"Delivery failed: {err}")
 
     def tick(self):
         """Called once per tick, after all readings of that tick were sent."""
