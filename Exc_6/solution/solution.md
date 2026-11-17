@@ -383,3 +383,18 @@ decisions* lists more of these defaults.
 If R4 fails in Run 3 on your laptop, start one more velocity instance
 (`python3 agents.py --velocity 4`), or run the card processor with
 `--tps 500`.
+
+
+---
+**Closing answer**
+
+Debezium defaulted to 1 partition and the table's primary key (id) as the event key. In production, leaving these defaults unchecked would have caused two severe, silent failures without crashing any service.
+
+- With 1 partition, only a single instance could process traffic while the rest stayed idle, creating a backlog and late fraud alerts.
+- Keying by payment id would scatter a cardholder's payments across partitions, causing the stateful fradu model to miss almost all card-testing attacks.
+
+Team could have detected all this issues early by: 
+* Monitoring consumer group lag
+* Checking Kafka metrics for idle consumer instances with zero assigned partitions
+* Tracking fraud detection rates against confirmed chargebacks.
+---
