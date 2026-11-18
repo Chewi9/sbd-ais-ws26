@@ -351,7 +351,7 @@ routine, from step 1**, as in Run 2.
 
 **Result:** R2, R3 and R4 all pass.
 
-**Why:** With the cardholder as the message key and 6 partitions, one velocity instance sees every payment of that cardholder in commit order and can accurately count payments within the 60 second window. An occasional false alert is expected, because an honest cardholder can naturally make 8 legitimate payments within a minute.
+**Why:** User_id is now the message key, Kafka sends all payments from the same cardholder to the same partition and the same agent in order.
 
 
 ---
@@ -391,7 +391,7 @@ If R4 fails in Run 3 on your laptop, start one more velocity instance
 Debezium defaulted to 1 partition and the table's primary key (id) as the event key. In production, leaving these defaults unchecked would have caused two severe, silent failures without crashing any service.
 
 - With 1 partition, only a single instance could process traffic while the rest stayed idle, creating a backlog and late fraud alerts.
-- Keying by payment id would scatter a cardholder's payments across partitions, causing the stateful fradu model to miss almost all card-testing attacks.
+- Keying by payment id would scatter a cardholder's payments across partitions, causing the stateful fraud model to miss almost all card-testing attacks.
 
 Team could have detected all this issues early by: 
 * Monitoring consumer group lag
