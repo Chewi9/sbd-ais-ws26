@@ -75,6 +75,8 @@ choose if your team *owned* the payment path?
 
 
 ---
+### **Answer**
+
 I would choose option 4: log-based with Debezium.
 
 - Payment system is certified and managed by another team, we cannot change its code, which rules out both **dual write** and **outbox**.
@@ -176,6 +178,8 @@ the key of an event?
 
 
 ---
+### Answer
+
 **Prediction:** I expected the three velocity agents to share the work and R4 to pass.
 
 #### Velocity model (card testing)
@@ -264,6 +268,7 @@ partitions [0, 1]`, `[vel-2] … [2, 3]`, `[vel-3] … [4, 5]`.
 
 
 ---
+### **Answer**
 **Prediction:** All three agents will work, but R3 fails because the key is still the payment id.
 
 #### Velocity model (card testing)
@@ -328,6 +333,8 @@ what changes on the scoreboard? Then save the file and repeat the **whole
 routine, from step 1**, as in Run 2.
 
 ---
+### **Answer**
+
 **Prediction:** key becomes {user_id} and all payments of a cardholder go to the same partition and the same agent, so R3 should pass.
 
 #### Velocity model (card testing)
@@ -386,7 +393,7 @@ If R4 fails in Run 3 on your laptop, start one more velocity instance
 
 
 ---
-**Closing answer**
+### Closing answer
 
 Debezium defaulted to 1 partition and the table's primary key (id) as the event key. In production, leaving these defaults unchecked would have caused two severe, silent failures without crashing any service.
 
